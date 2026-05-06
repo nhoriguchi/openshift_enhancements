@@ -8,7 +8,7 @@ approvers:
   - TBD
 api-approvers: None
 creation-date: 2026-01-29
-last-updated: 2026-01-29
+last-updated: 2026-05-xx
 tracking-link: N/A
 see-also:
   - https://issues.redhat.com/browse/OCPSTRAT-2649
@@ -66,6 +66,9 @@ component owners of any guideline violations.
 ### Non-Goals
 
 * Strict enforcement of guidelines that block product releases is out of scope.
+
+> これはカットかな、できるので。あるいは matured になったタイミングで有効化することも検討、というトーンか。
+
 * Extending HA policy management to cover general guideline compliance beyond
   HA is also out of scope for now.
 * This proposal targets only all core and infrastructure-related components,
@@ -125,10 +128,16 @@ process, and there are 2 types:
   - In HA level check process, the tool collect HA-related information from a
     running cluster (like probe settings and redundancy settings).
   - The result is stored in storage with assessment result.
+    > ここは厳しいところなので削除して既存の CI 結果のサマリに依存
+    > effective には JIRA を保存先として使用する。
   - Compared with previous check results, the tool identifies newly found
     failed test cases.
   - The tool sends notifications to the component owners whose components
     have failed the HA level check.
+
+> existing notification mechanism via JIRA, where test failure is automatically shared with the team (責任のある)
+
+
 - Record a summary of the results of the current check results.
 - Terminate the current HA level check process.
 - Component owners who received notifications of new failed test cases,
@@ -152,11 +161,16 @@ GitHub or some internal repository) for later use.  There’re multiple HA
 configs in each component, such as healthCheck and redundancy.
 Generally, HA level check obeys the flowchart in the following diagram.
 
+> JUnit 形式でのテスト出力を自動生成する。
+
 ![](./general-flowchart-ha-level-check.png)
 
 The check is done for each component for each HA config, then returns
 one of the three values: pass, fail, and skip. Each config has its own
 HA implementation status info and component specific info.
+
+> pass, fail, flaky1, flake2 とする
+> それぞれの意味
 
 This flowchart is essential for HA policy management, so detailed explanations
 about the intentions follow:
@@ -279,6 +293,11 @@ in a timely manner to prioritize and plan the development of HA features.
 Mitigation: The management process will only issue warnings without
 blocking the actual release process.
 
+> Flaky モードで実行して、データ収集する。例外が出揃い、テストが安定したら Fail させる。
+> alpha が flaky モード
+> beta で テスト失敗モード、
+> 安定したら GA
+
 ### Drawbacks
 
 None
@@ -293,6 +312,8 @@ Not known
 - How to maintain and publish the result of HA policy management?
 - Currently all defined HA configs are healthCheck and redundancy, but is there any
   other possible HA configs?
+
+> AI agent based の運用自動化
 
 ## Test Plan
 
