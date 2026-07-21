@@ -8,7 +8,7 @@ approvers:
   - TBD
 api-approvers: None
 creation-date: 2026-01-29
-last-updated: 2026-05-xx
+last-updated: 2026-07-24
 tracking-link: N/A
 see-also:
   - https://issues.redhat.com/browse/OCPSTRAT-2649
@@ -65,10 +65,6 @@ component owners of any guideline violations.
 
 ### Non-Goals
 
-* Strict enforcement of guidelines that block product releases is out of scope.
-
-> これはカットかな、できるので。あるいは matured になったタイミングで有効化することも検討、というトーンか。
-
 * Extending HA policy management to cover general guideline compliance beyond
   HA is also out of scope for now.
 * This proposal targets only all core and infrastructure-related components,
@@ -76,10 +72,44 @@ component owners of any guideline violations.
 
 ## Proposal
 
+> I would propose radical simplification of the proposal. I believe we can meet your goals with well established precedents, without the need for lots of new processes and systems, and you can get up and running quite quickly.
+>
+> We've done this sort of things many times, the process is as follows:
+>
+> Establish the Tests
+> Typically these are implemented as monitortests, they will run at the end of most of our hundreds of CI jobs. The monitortests generate junit test results per openshift component namespace, and per HA check you'd like to implement.
+>
+> Example: https://github.com/openshift/origin/blob/00eaaf722f71858b3af6091af44b7225b5f8a6d7/pkg/monitortests/kubelet/containerfailures/container_failures.go#L137
+>
+> Typically these kinds of tests encode exceptions linked to jiras. So you write the tests, do some preliminary testing in the PR (we can help), see what violations it finds, then write a Jira for each. (more below)
+>
+> I suggest having the tests only flake when they find a problem for now, so we do not merge the PR and cause mass failures. Once all the problems are identified with bugs filed and exceptions added, the test can be moved to a state where it's allowed to fail.
+>
+> In this case envision:
+>
+> [Monitor:ha-compliance][Jira:"console"] pods in ns/openshift-console should define health checks
+> [Monitor:ha-compliance][Jira:"console"] pods in ns/openshift-console should sufficient replicas for HA
+>
+> etc.
+>
+> File Bugs for Violations
+> Sippy provides the dashboard of current state. Example for the monitortest linked above.
+>
+> As problems are identified, someone will need to file bugs and add exceptions within the test. Typically we'll label the jiras with a specific label to help keep track. For any approved exception the test will usually permanently flake.
+>
+> In the event the jiras is closed as not applicable or can't be fixed by engineering or PM, those should d likely transition from exceptions to just permanently approved whitelist with a comment explaining why, or a link to the jira that explains.
+>
+> Once the test is stable in the wild, new violations will immediately start failing jobs and we have ample provisions for that to make it's way to dev teams. This prevents new components from coming in without the capability unless someone explicitly approves it, as well as regressions for existing components.
+>
+> It can take time and effort for someone to find all the exceptions to be added and allow the test to start failing on regressions/problems, but in the interim the tests are live, gathering data, and not causing mass failures/panic.
+
 * Create test cases to collect HA policy information from running OpenShift clusters.
 * Define HA configs to define the type of HA feature to be handled
   (redundancy and health check in the first proposal).
 * Define the data structure of input and output of "HA level check" process.
+
+> Junit
+
 * Create test cases to assess the output of "HA level check" process and
   detect degradations in the HA implementation status.
 * Define how to store the result of HA level check of each OpenShift version
@@ -91,6 +121,9 @@ component owners of any guideline violations.
 * Define the criteria that must be met to pass the HA level check for each
   component and for each HA config.
 * Define the workflow of how to collect the responses from notified component owners.
+
+> JIRA
+
 
 ### Workflow Description
 
@@ -156,6 +189,9 @@ process, and there are 2 types:
 
 HA level check uses these types of input information to judge whether each
 component properly covers HA configs or not, then the result is output
+
+> ストレージを追加するのはだめ。代替案があるのでそれで。
+
 in JSON data format so that it can be stored in some shared repository (like
 GitHub or some internal repository) for later use.  There’re multiple HA
 configs in each component, such as healthCheck and redundancy.
@@ -171,6 +207,12 @@ HA implementation status info and component specific info.
 
 > pass, fail, flaky1, flake2 とする
 > それぞれの意味
+
+- pass
+- flake (because the component is permanently whitelisted)
+- flake (because a pending jira is awaiting a response)
+- fail (no exception/whitelist entry exists, and the violation appears unapproved)
+
 
 This flowchart is essential for HA policy management, so detailed explanations
 about the intentions follow:
