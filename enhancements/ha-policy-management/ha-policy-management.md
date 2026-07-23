@@ -24,9 +24,10 @@ This enhancement improves guideline compliance checks within the CI process
 (the Red Hat-internal pipeline for OpenShift) to improve overall HA.
 Specifically, it integrates a mechanism to evaluate HA levels based on
 implementation status and developers' input. By notifying developers of
-non-compliant components, the management process encourages developers to follow the
-guidelines. All data will be stored in a common repository, allowing both
-developers and partners to grasp the overall HA status early and easily.
+non-compliant components (via existing testing framwork adn JIRA),
+the management process encourages developers to follow the guidelines.
+All data will be stored in Sippy, allowing both developers and partners
+to grasp the overall HA status early and easily.
 
 ## Motivation
 
@@ -72,27 +73,17 @@ component owners of any guideline violations.
 
 ## Proposal
 
-> I would propose radical simplification of the proposal. I believe we can meet your goals with well established precedents, without the need for lots of new processes and systems, and you can get up and running quite quickly.
->
-> We've done this sort of things many times, the process is as follows:
->
-> Establish the Tests
-> Typically these are implemented as monitortests, they will run at the end of most of our hundreds of CI jobs. The monitortests generate junit test results per openshift component namespace, and per HA check you'd like to implement.
->
-> Example: https://github.com/openshift/origin/blob/00eaaf722f71858b3af6091af44b7225b5f8a6d7/pkg/monitortests/kubelet/containerfailures/container_failures.go#L137
->
-> Typically these kinds of tests encode exceptions linked to jiras. So you write the tests, do some preliminary testing in the PR (we can help), see what violations it finds, then write a Jira for each. (more below)
->
-> I suggest having the tests only flake when they find a problem for now, so we do not merge the PR and cause mass failures. Once all the problems are identified with bugs filed and exceptions added, the test can be moved to a state where it's allowed to fail.
->
-> In this case envision:
->
-> [Monitor:ha-compliance][Jira:"console"] pods in ns/openshift-console should define health checks
-> [Monitor:ha-compliance][Jira:"console"] pods in ns/openshift-console should sufficient replicas for HA
->
-> etc.
->
-> File Bugs for Violations
+### Establish the Tests
+
+Typically these are implemented as monitortests, they will run at the end of most of our hundreds of CI jobs. The monitortests generate junit test results per openshift component namespace, and per HA check you'd like to implement.
+* Example: https://github.com/openshift/origin/blob/00eaaf722f71858b3af6091af44b7225b5f8a6d7/pkg/monitortests/kubelet/containerfailures/container_failures.go#L137
+
+Typically these kinds of tests encode exceptions linked to jiras. So you write the tests, do some preliminary testing in the PR (we can help), see what violations it finds, then write a Jira for each. (more below)
+
+I suggest having the tests only flake when they find a problem for now, so we do not merge the PR and cause mass failures. Once all the problems are identified with bugs filed and exceptions added, the test can be moved to a state where it's allowed to fail.
+
+### File Bugs for Violations
+
 > Sippy provides the dashboard of current state. Example for the monitortest linked above.
 >
 > As problems are identified, someone will need to file bugs and add exceptions within the test. Typically we'll label the jiras with a specific label to help keep track. For any approved exception the test will usually permanently flake.
@@ -103,27 +94,27 @@ component owners of any guideline violations.
 >
 > It can take time and effort for someone to find all the exceptions to be added and allow the test to start failing on regressions/problems, but in the interim the tests are live, gathering data, and not causing mass failures/panic.
 
-* Create test cases to collect HA policy information from running OpenShift clusters.
+* Create monitortest test cases to collect HA policy information from running OpenShift clusters.
+* Define the criteria which conditions should be met for each component pass
+  an HA level check for an HA config.
 * Define HA configs to define the type of HA feature to be handled
   (redundancy and health check in the first proposal).
-* Define the data structure of input and output of "HA level check" process.
-
-> Junit
+* Define the criteria that must be met to pass the HA level check for each
+  component and for each HA config.
 
 * Create test cases to assess the output of "HA level check" process and
   detect degradations in the HA implementation status.
+* Define the workflow of how to collect the responses from notified component owners.
+
+* あるテスト走行結果に対応するテスト結果の詳細、を得る手段の実装
+* flake の一斉解除方法の実装方法、
+
+> 以下はSippy を活用して Junit の形で保存、閲覧。JIRA の bot を通して各コンポーネントに通知する。
+* Define the data structure of input and output of "HA level check" process.
 * Define how to store the result of HA level check of each OpenShift version
   to track the record of previous check results.
 * Introduce a mechanism to notify the degradations to component owners whose
   projects have failed test cases.
-* Define the criteria which conditions should be met for each component pass
-  an HA level check for an HA config.
-* Define the criteria that must be met to pass the HA level check for each
-  component and for each HA config.
-* Define the workflow of how to collect the responses from notified component owners.
-
-> JIRA
-
 
 ### Workflow Description
 
