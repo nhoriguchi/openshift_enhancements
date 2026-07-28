@@ -75,26 +75,8 @@ component owners of any guideline violations.
 
 ### Establish the Tests
 
-Typically these are implemented as monitortests, they will run at the end of most of our hundreds of CI jobs. The monitortests generate junit test results per openshift component namespace, and per HA check you'd like to implement.
-* Example: https://github.com/openshift/origin/blob/00eaaf722f71858b3af6091af44b7225b5f8a6d7/pkg/monitortests/kubelet/containerfailures/container_failures.go#L137
-
-Typically these kinds of tests encode exceptions linked to jiras. So you write the tests, do some preliminary testing in the PR (we can help), see what violations it finds, then write a Jira for each. (more below)
-
-I suggest having the tests only flake when they find a problem for now, so we do not merge the PR and cause mass failures. Once all the problems are identified with bugs filed and exceptions added, the test can be moved to a state where it's allowed to fail.
-
-### File Bugs for Violations
-
-> Sippy provides the dashboard of current state. Example for the monitortest linked above.
->
-> As problems are identified, someone will need to file bugs and add exceptions within the test. Typically we'll label the jiras with a specific label to help keep track. For any approved exception the test will usually permanently flake.
->
-> In the event the jiras is closed as not applicable or can't be fixed by engineering or PM, those should d likely transition from exceptions to just permanently approved whitelist with a comment explaining why, or a link to the jira that explains.
->
-> Once the test is stable in the wild, new violations will immediately start failing jobs and we have ample provisions for that to make it's way to dev teams. This prevents new components from coming in without the capability unless someone explicitly approves it, as well as regressions for existing components.
->
-> It can take time and effort for someone to find all the exceptions to be added and allow the test to start failing on regressions/problems, but in the interim the tests are live, gathering data, and not causing mass failures/panic.
-
-* Create monitortest test cases to collect HA policy information from running OpenShift clusters.
+* Create a monitortest to collect HA policy information from running OpenShift clusters,
+  then to check that each component meets the HA policy or not.
 * Define the criteria which conditions should be met for each component pass
   an HA level check for an HA config.
 * Define HA configs to define the type of HA feature to be handled
@@ -102,9 +84,29 @@ I suggest having the tests only flake when they find a problem for now, so we do
 * Define the criteria that must be met to pass the HA level check for each
   component and for each HA config.
 
-* Create test cases to assess the output of "HA level check" process and
-  detect degradations in the HA implementation status.
+### File Bugs for Violations
+
+* The current status of HA level check is displayed in the dashboard of Sippy.
+* If a failure is newly identified, a JIRA ticket will need to be filed to track it.
+* By tracking issues through Jira ticket statuses, the HA implementation status becomes transparent and can be properly managed.
+
+### Rollout the process
+
+* Initially, any failures in the monitortest will be tolerated as a flake to avoid mass failures.
+* 初期に fail したコンポーネントに対する JIRA が一通り作成され、??????
+
+
+The monitortests generate junit test results per openshift component namespace, and per HA check you'd like to implement.
+Typically these kinds of tests encode exceptions linked to jiras. 
+Once all the problems are identified with bugs filed and exceptions added, the test can be moved to a state where it's allowed to fail.
+
+
+Once the test is stable in the wild, new violations will immediately start failing jobs and we have ample provisions for that to make it's way to dev teams. This prevents new components from coming in without the capability unless someone explicitly approves it, as well as regressions for existing components.
+
+It can take time and effort for someone to find all the exceptions to be added and allow the test to start failing on regressions/problems, but in the interim the tests are live, gathering data, and not causing mass failures/panic.
+
 * Define the workflow of how to collect the responses from notified component owners.
+
 
 * あるテスト走行結果に対応するテスト結果の詳細、を得る手段の実装
 * flake の一斉解除方法の実装方法、
@@ -116,7 +118,34 @@ I suggest having the tests only flake when they find a problem for now, so we do
 * Introduce a mechanism to notify the degradations to component owners whose
   projects have failed test cases.
 
+
+
 ### Workflow Description
+
+
+> 以下は詳細の workflow のところで書くか。
+* If a failure is newly identified, a JIRA ticket will need to be filed to track it (manually or by bot).
+* The JIRA has a label to help keep tracking and the monitortest case can address it for exception.
+* The description of JIRA contains why the monitortest failed, typically saying some components in the associated namespace lack one or more HA implementations.
+* The JIRA belongs to the JIRA project who develops the failed component (linked to the failed namespace) so that the responsible development team can detect the issue.
+* The JIRA can be closed in one of the following criterion:
+    * when the monitortest failures are fixed, or the decision,
+    * when the plan to fix is declared in the JIRA, or
+    * when the reason for WONTFIX is explained.
+* When the JIRA is handled, the monitortest is treated as pass or flake, allowing the release.
+* During the JIRA is not handled, the monitortest is treated as fail, blocking the release.
+
+
+** For any approved exception the test will usually permanently flake.
+** JIRA のディスカッションはコンポーネント担当者からの description を含む。description は将来の変更をトラッキングしやすいフォーマットになっている。
+** The JIRAs record component-specific exceptions in the monitortest code by linking them to designated Jira labels.
+** When a violation is associated with the tracking JIRA ticket under these labels,
+** the monitortest will classify the result as a flake rather than a failure, thereby preventing CI job failures while keeping track of known issues.
+
+In the event the jiras is closed as not applicable or can't be fixed by engineering or PM,
+those should likely transition from exceptions to just permanently approved whitelist with a comment explaining why, or a link to the jira that explains.
+
+
 
 The following figure shows the overview of HA policy management process.
 
@@ -224,6 +253,7 @@ about the intentions follow:
 
 #### How component owners respond?
 
+<!--
 A component owner whose component failed the HA Level Check will receive a
 notification containing the following data (details are omitted for brevity):
 
@@ -294,6 +324,7 @@ resource issues, the expected response would be as follows:
 
 In this case, the response must also include the timeframe for resolving
 the blocking issues, specified in the `componentSpecific.targetVersion` field.
+-->
 
 ### API Extensions
 
