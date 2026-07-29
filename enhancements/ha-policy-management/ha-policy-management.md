@@ -88,122 +88,64 @@ component owners of any guideline violations.
 
 * The current status of HA level check is displayed in the dashboard of Sippy.
 * If a failure is newly identified, a JIRA ticket will need to be filed to track it.
-* By tracking issues through Jira ticket statuses, the HA implementation status becomes transparent and can be properly managed.
+* By tracking issues through Jira ticket statuses, the HA implementation status
+  becomes transparent and can be properly managed.
+
+> 全体的に JIRA ticket と表記する。 JIRA でチケットを含意させないようにする。
 
 ### Rollout the process
 
 * Initially, any failures in the monitortest will be tolerated as a flake to avoid mass failures.
-* 初期に fail したコンポーネントに対する JIRA が一通り作成され、??????
-
-
-The monitortests generate junit test results per openshift component namespace, and per HA check you'd like to implement.
-Typically these kinds of tests encode exceptions linked to jiras. 
-Once all the problems are identified with bugs filed and exceptions added, the test can be moved to a state where it's allowed to fail.
-
+* early phase で発見された monitortest の failures が全てハンドルされたら rollout して、以降は fail (can block the release) 状態にする。
+* It can take time and effort for someone to find all the exceptions to be added and allow the test to start failing on regressions/problems, but in the interim the tests are live, gathering data, and not causing mass failures/panic.
+安定したら...
 
 Once the test is stable in the wild, new violations will immediately start failing jobs and we have ample provisions for that to make it's way to dev teams. This prevents new components from coming in without the capability unless someone explicitly approves it, as well as regressions for existing components.
-
-It can take time and effort for someone to find all the exceptions to be added and allow the test to start failing on regressions/problems, but in the interim the tests are live, gathering data, and not causing mass failures/panic.
-
-* Define the workflow of how to collect the responses from notified component owners.
+> ひとたびこのテストが実際の環境で安定すれば、新たな違反が発生した際に即座に CI ジョブが失敗（Fail）するようになります。また、それが開発チームへ確実に通知される仕組みも十分に整っています。これにより、誰かが明示的に承認しない限り、HA 機能を備えていない新しいコンポーネントが追加されるのを防ぐとともに、既存コンポーネントにおける設定の退化（先祖返り・レグレッション）も防ぐことができます。
 
 
-* あるテスト走行結果に対応するテスト結果の詳細、を得る手段の実装
-* flake の一斉解除方法の実装方法、
-
-> 以下はSippy を活用して Junit の形で保存、閲覧。JIRA の bot を通して各コンポーネントに通知する。
-* Define the data structure of input and output of "HA level check" process.
-* Define how to store the result of HA level check of each OpenShift version
-  to track the record of previous check results.
-* Introduce a mechanism to notify the degradations to component owners whose
-  projects have failed test cases.
-
-
+> * Define the workflow of how to collect the responses from notified component owners.
+> * あるテスト走行結果に対応するテスト結果の詳細、を得る手段の実装
+> * flake の一斉解除方法の実装方法、
+> 
+> > 以下はSippy を活用して Junit の形で保存、閲覧。JIRA の bot を通して各コンポーネントに通知する。
+> * Define the data structure of input and output of "HA level check" process.
+> * Define how to store the result of HA level check of each OpenShift version
+>   to track the record of previous check results.
+> * Introduce a mechanism to notify the degradations to component owners whose
+>   projects have failed test cases.
+> 
 
 ### Workflow Description
 
+The main workflow is like below:
+1. Developers create PRs or commit their code
+2. OpenShift CI runs monitortest for ha-policy [^1]
+3. Sippy collects and shows test results in the Dashboard
+4. Prow monitors the failed test results, and create JIRA tickets if needed
+5. Prow set labels for tracking on the tickets
+6. Developers fix the failed HA policy check OR provide rationale/plans
 
-> 以下は詳細の workflow のところで書くか。
-* If a failure is newly identified, a JIRA ticket will need to be filed to track it (manually or by bot).
-* The JIRA has a label to help keep tracking and the monitortest case can address it for exception.
-* The description of JIRA contains why the monitortest failed, typically saying some components in the associated namespace lack one or more HA implementations.
-* The JIRA belongs to the JIRA project who develops the failed component (linked to the failed namespace) so that the responsible development team can detect the issue.
-* The JIRA can be closed in one of the following criterion:
-    * when the monitortest failures are fixed, or the decision,
-    * when the plan to fix is declared in the JIRA, or
-    * when the reason for WONTFIX is explained.
-* When the JIRA is handled, the monitortest is treated as pass or flake, allowing the release.
-* During the JIRA is not handled, the monitortest is treated as fail, blocking the release.
+[^1]: draft PR: https://github.com/openshift/origin/pull/31449/changes/5f9e5ced830bb85c24ff7d48fef35162dc74ebc3
 
 
-** For any approved exception the test will usually permanently flake.
-** JIRA のディスカッションはコンポーネント担当者からの description を含む。description は将来の変更をトラッキングしやすいフォーマットになっている。
-** The JIRAs record component-specific exceptions in the monitortest code by linking them to designated Jira labels.
-** When a violation is associated with the tracking JIRA ticket under these labels,
-** the monitortest will classify the result as a flake rather than a failure, thereby preventing CI job failures while keeping track of known issues.
-
-In the event the jiras is closed as not applicable or can't be fixed by engineering or PM,
-those should likely transition from exceptions to just permanently approved whitelist with a comment explaining why, or a link to the jira that explains.
-
-
-
-The following figure shows the overview of HA policy management process.
-
-![](./process-overview-ha-policy-management.png)
-
-As shown in this figure, this management process is fundamentally based on
-collecting and centrally managing the HA implementation status of each
-component that makes up OpenShift cluster.
-Then, utilizing the collected information, a core function of the management
-process (called "HA level check") requests the component owners for additional
-information, and encourages them to implement the relevant HA features.
-
-HA policy information is defined as info which is needed by HA level check
-process, and there are 2 types:
-
-- Type 1: HA implementation status info which can be collected
-  programmatically from the actual OpenShift cluster.
-- Type 2: Component specific info which is collected by questions
-  for component owners about HA design or development plan.
-
-#### Actors in the workflow
-
-- **Project owner** is a human responsible for the decision over anything
-  about development of the component which the project is about.
-- **Process owner of HA policy management** is a human or non-human user
-  responsible for checking the result of HA level check and interacting with
-  component owners to encourage to implement HA or reason the decision.
-
-#### Steps of how HA policy management works
-
-- Trigger CI process.
-- CI process runs a test case that do HA level check process.
-  - In HA level check process, the tool collect HA-related information from a
-    running cluster (like probe settings and redundancy settings).
-  - The result is stored in storage with assessment result.
-    > ここは厳しいところなので削除して既存の CI 結果のサマリに依存
-    > effective には JIRA を保存先として使用する。
-  - Compared with previous check results, the tool identifies newly found
-    failed test cases.
-  - The tool sends notifications to the component owners whose components
-    have failed the HA level check.
-
-> existing notification mechanism via JIRA, where test failure is automatically shared with the team (責任のある)
-
-
-- Record a summary of the results of the current check results.
-- Terminate the current HA level check process.
-- Component owners who received notifications of new failed test cases,
-  have 2 options to respond:
-  - If the product manager (PM) of the component determines that it is
-    unnecessary for implementation, design, or operational reasons, the HA
-    feature will not be implemented, and the reasons for this determination
-    will be documented.
-  - If the HA feature has not yet been implemented solely due to development
-    priority or resource constraints, the reason and the planned
-    implementation version shall be recorded.
-  - The reason and plan given by component owners will be used in the next
-    run as justification of leaving failed testcases.
+> * The description of JIRA contains why the monitortest failed, typically saying some components in the associated namespace lack one or more HA implementations.
+> * The JIRA belongs to the JIRA project who develops the failed component (linked to the failed namespace) so that the responsible development team can detect the issue.
+> * The JIRA can be closed in one of the following criterion:
+>     * when the monitortest failures are fixed, or the decision,
+>     * when the plan to fix is declared in the JIRA, or
+>     * when the reason for WONTFIX is explained. (exception added)
+> * When the JIRA is handled, the monitortest is treated as pass or flake, allowing the release.
+> * During the JIRA is not handled, the monitortest is treated as fail, blocking the release.
+> 
+> ** For any approved exception the test will usually permanently flake.
+> ** JIRA のディスカッションはコンポーネント担当者からの description を含む。description は将来の変更をトラッキングしやすいフォーマットになっている。
+> ** The JIRAs record component-specific exceptions in the monitortest code by linking them to designated Jira labels.
+> ** When a violation is associated with the tracking JIRA ticket under these labels,
+> ** the monitortest will classify the result as a flake rather than a failure, thereby preventing CI job failures while keeping track of known issues.
+> 
+> In the event the jiras is closed as not applicable or can't be fixed by engineering or PM,
+> those should likely transition from exceptions to just permanently approved whitelist with a comment explaining why, or a link to the jira that explains.
 
 #### HA level check
 
@@ -219,8 +161,6 @@ Generally, HA level check obeys the flowchart in the following diagram.
 
 > JUnit 形式でのテスト出力を自動生成する。
 
-![](./general-flowchart-ha-level-check.png)
-
 The check is done for each component for each HA config, then returns
 one of the three values: pass, fail, and skip. Each config has its own
 HA implementation status info and component specific info.
@@ -234,97 +174,10 @@ HA implementation status info and component specific info.
 - fail (no exception/whitelist entry exists, and the violation appears unapproved)
 
 
-This flowchart is essential for HA policy management, so detailed explanations
-about the intentions follow:
-- The 1st condition class *“the HA feature is already implemented?”* is judged
-  only with HA implementation status info, which returns true if the target
-  HA feature is already implemented or else false.
-- The 2nd condition class *“the HA feature is not necessary for typical
-  reasons?”* helps component owners easily judge whether HA implementation is
-  actually needed or not. This condition class includes typical viewpoint
-  and saves time and effort of component owners to think about how to judge.
-- The 3rd condition class *“the reason and plan are given?”* asks why the HA
-  is not implemented for the reason other than the answers in the 2nd
-  condition class, and when to implement the HA feature. These are judged by
-  open-ended answer, which covers very component-specific technical reason
-  and/or development-related issues. If these are left unfulfilled, the HA
-  level check will fail, and the component owner will be warned with an
-  information request.
-
 #### How component owners respond?
 
-<!--
-A component owner whose component failed the HA Level Check will receive a
-notification containing the following data (details are omitted for brevity):
 
-```
-{
-  "kind": "StatefulSet",
-  "name": "lokistack-index-gateway",
-  "namespace": "openshift-logging",
-  "container": "loki-index-gateway",
-  "healthCheck": {
-    "hasReadinessProbe": "true",
-    "hasLivenessProbe": "true",
-    "hasStartupProbe": "false",
-    "hasRouterOrK8sService": "true",
-    "hasMultiReplicas": "true"
-  },
-  "haLevelCheckResult": {
-    "healthCheckReadinessProbe": "pass",
-    "healthCheckLivenessProbe": "pass",
-    "healthCheckStartupProbe": "fail"
-  }
-}
-```
-
-Here `healthCheck` is set by info collected programmatically in CI process.
-The result of HA level check is set in `haLevelCheckResult`.
-In this case, `haLevelCheckResults.healthCheckStartupProbe` is `fail`.
-
-There're two primary ways that recipients are expected to respond the
-notification.  The first is to simply implement the required HA config
-(a startup probe in this example).
-The second is to provide component-specific information.
-For example, if a component owner believes that a startup probe is
-unnecessary for their container, following response would be expected:
-
-```
-{
-  "kind": "StatefulSet",
-  "name": "lokistack-index-gateway",
-  "namespace": "openshift-logging",
-  "container": "loki-index-gateway",
-  "healthCheck": {
-    "componentSpecific": {
-      "_ignore": "startup probe is not required for design reasons (...more details...)"
-    }
-  }
-}
-```
-
-Alternatively, if the component owner agrees that a startup probe is
-necessary but cannot implement it immediately due to constraints such as
-resource issues, the expected response would be as follows:
-
-```
-{
-  "kind": "StatefulSet",
-  "name": "lokistack-index-gateway",
-  "namespace": "openshift-logging",
-  "container": "loki-index-gateway",
-  "healthCheck": {
-    "componentSpecific": {
-      "_ignore": "the team is busy for higher priority tasks",
-      "targetVersion": "v4.22"
-    }
-  }
-}
-```
-
-In this case, the response must also include the timeframe for resolving
-the blocking issues, specified in the `componentSpecific.targetVersion` field.
--->
+...
 
 ### API Extensions
 
