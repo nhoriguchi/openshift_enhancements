@@ -8,7 +8,7 @@ approvers:
   - TBD
 api-approvers: None
 creation-date: 2026-01-29
-last-updated: 2026-07-24
+last-updated: 2026-07-29
 tracking-link: N/A
 see-also:
   - https://issues.redhat.com/browse/OCPSTRAT-2649
@@ -91,93 +91,44 @@ component owners of any guideline violations.
 * By tracking issues through Jira ticket statuses, the HA implementation status
   becomes transparent and can be properly managed.
 
-> 全体的に JIRA ticket と表記する。 JIRA でチケットを含意させないようにする。
-
-### Rollout the process
-
-* Initially, any failures in the monitortest will be tolerated as a flake to avoid mass failures.
-* early phase で発見された monitortest の failures が全てハンドルされたら rollout して、以降は fail (can block the release) 状態にする。
-* It can take time and effort for someone to find all the exceptions to be added and allow the test to start failing on regressions/problems, but in the interim the tests are live, gathering data, and not causing mass failures/panic.
-安定したら...
-
-Once the test is stable in the wild, new violations will immediately start failing jobs and we have ample provisions for that to make it's way to dev teams. This prevents new components from coming in without the capability unless someone explicitly approves it, as well as regressions for existing components.
-> ひとたびこのテストが実際の環境で安定すれば、新たな違反が発生した際に即座に CI ジョブが失敗（Fail）するようになります。また、それが開発チームへ確実に通知される仕組みも十分に整っています。これにより、誰かが明示的に承認しない限り、HA 機能を備えていない新しいコンポーネントが追加されるのを防ぐとともに、既存コンポーネントにおける設定の退化（先祖返り・レグレッション）も防ぐことができます。
-
-
-> * Define the workflow of how to collect the responses from notified component owners.
-> * あるテスト走行結果に対応するテスト結果の詳細、を得る手段の実装
-> * flake の一斉解除方法の実装方法、
-> 
-> > 以下はSippy を活用して Junit の形で保存、閲覧。JIRA の bot を通して各コンポーネントに通知する。
-> * Define the data structure of input and output of "HA level check" process.
-> * Define how to store the result of HA level check of each OpenShift version
->   to track the record of previous check results.
-> * Introduce a mechanism to notify the degradations to component owners whose
->   projects have failed test cases.
-> 
-
 ### Workflow Description
 
 The main workflow is like below:
 1. Developers create PRs or commit their code
-2. OpenShift CI runs monitortest for ha-policy [^1]
+2. OpenShift CI runs monitortest for ha-policy
 3. Sippy collects and shows test results in the Dashboard
 4. Prow monitors the failed test results, and create JIRA tickets if needed
-5. Prow set labels for tracking on the tickets
+5. Prow sets labels for tracking on the tickets
 6. Developers fix the failed HA policy check OR provide rationale/plans
 
-[^1]: draft PR: https://github.com/openshift/origin/pull/31449/changes/5f9e5ced830bb85c24ff7d48fef35162dc74ebc3
+Some details for each step are shown below:
 
+* In step 2, draft PR of the monitortest for ha-poilcy-check is here: https://github.com/openshift/origin/pull/31449/changes/5f9e5ced830bb85c24ff7d48fef35162dc74ebc3
+* In step 4, the description of JIRA ticket contains is generated based on the failure message of the monitortest, which typically saying some components in the associated namespace lack one or more HA implementations.
+* In step 4, a separate JIRA ticket is created for each namespace so it contains multiple failures which belongs to all workloads in the namespace. That's useful because namespaces are closest to the unit of components associated with a development project.
+* In step 6, the JIRA ticket can be handled in one of the following ways. With these handling, the component is treated as pass or flake, allowing the release. Without any handling, the component is treated as fail (Note that the latter case will be handled as flake in early phase to avoid flood of failures before the process matures).
+** to fix by implementing the specified HA,
+** to declare WONTFIX with some reason,
+** to declare pending with some plan.
 
-> * The description of JIRA contains why the monitortest failed, typically saying some components in the associated namespace lack one or more HA implementations.
-> * The JIRA belongs to the JIRA project who develops the failed component (linked to the failed namespace) so that the responsible development team can detect the issue.
-> * The JIRA can be closed in one of the following criterion:
->     * when the monitortest failures are fixed, or the decision,
->     * when the plan to fix is declared in the JIRA, or
->     * when the reason for WONTFIX is explained. (exception added)
-> * When the JIRA is handled, the monitortest is treated as pass or flake, allowing the release.
-> * During the JIRA is not handled, the monitortest is treated as fail, blocking the release.
-> 
-> ** For any approved exception the test will usually permanently flake.
-> ** JIRA のディスカッションはコンポーネント担当者からの description を含む。description は将来の変更をトラッキングしやすいフォーマットになっている。
-> ** The JIRAs record component-specific exceptions in the monitortest code by linking them to designated Jira labels.
-> ** When a violation is associated with the tracking JIRA ticket under these labels,
-> ** the monitortest will classify the result as a flake rather than a failure, thereby preventing CI job failures while keeping track of known issues.
-> 
-> In the event the jiras is closed as not applicable or can't be fixed by engineering or PM,
-> those should likely transition from exceptions to just permanently approved whitelist with a comment explaining why, or a link to the jira that explains.
+Below are the other notes:
+* Adding any approved exceptions in the monitortest code, a component can be always treated flake (as permanently approved whitelist).
+  Those should likely transition from exceptions to just permanently approved whitelist with a comment explaining why, or a link to the jira that explains.
 
-#### HA level check
+So the status of test result status is summarized like below:
 
-HA level check uses these types of input information to judge whether each
-component properly covers HA configs or not, then the result is output
+| State                                                                      | Result |
+| ---                                                                        | ---    |
+| The component meets HA policy                                              | pass   |
+| The component is permanently whitelisted                                   | flake  |
+| The JIRA ticket is pending (with rationale or plan)                        | flake  |
+| No exception/whitelist entry exists, and the violation appears unapproved. | fail   |
 
-> ストレージを追加するのはだめ。代替案があるのでそれで。
+### Rollout the process
 
-in JSON data format so that it can be stored in some shared repository (like
-GitHub or some internal repository) for later use.  There’re multiple HA
-configs in each component, such as healthCheck and redundancy.
-Generally, HA level check obeys the flowchart in the following diagram.
-
-> JUnit 形式でのテスト出力を自動生成する。
-
-The check is done for each component for each HA config, then returns
-one of the three values: pass, fail, and skip. Each config has its own
-HA implementation status info and component specific info.
-
-> pass, fail, flaky1, flake2 とする
-> それぞれの意味
-
-- pass
-- flake (because the component is permanently whitelisted)
-- flake (because a pending jira is awaiting a response)
-- fail (no exception/whitelist entry exists, and the violation appears unapproved)
-
-
-#### How component owners respond?
-
-
-...
+* Initially, any failures in the monitortest will be tolerated as a flake to avoid mass failures.
+* Once the toolset of the new process are prepared and all JIRA tickets created in early phase is handled, execute the rollout and start blocking the release based on failed cases.
+* Then, new violations will immediately start failing jobs and be timely notified to dev teams. This prevents new components from coming in without the HA capability unless someone explicitly approves it, as well as regressions for existing components.
 
 ### API Extensions
 
@@ -210,11 +161,6 @@ in a timely manner to prioritize and plan the development of HA features.
 Mitigation: The management process will only issue warnings without
 blocking the actual release process.
 
-> Flaky モードで実行して、データ収集する。例外が出揃い、テストが安定したら Fail させる。
-> alpha が flaky モード
-> beta で テスト失敗モード、
-> 安定したら GA
-
 ### Drawbacks
 
 None
@@ -229,8 +175,7 @@ Not known
 - How to maintain and publish the result of HA policy management?
 - Currently all defined HA configs are healthCheck and redundancy, but is there any
   other possible HA configs?
-
-> AI agent based の運用自動化
+- Some of the process could be automated by AI agent.
 
 ## Test Plan
 
